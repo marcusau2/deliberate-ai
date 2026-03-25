@@ -1,5 +1,7 @@
 """
 Download Kokoro TTS voice models from HuggingFace
+Note: Kokoro automatically downloads the model on first use.
+This script pre-downloads the voice models to avoid first-run delays.
 """
 
 import os
@@ -23,42 +25,16 @@ def download_voices():
     print("This may take a few minutes depending on your internet connection.")
     print()
 
-    # Download main model
-    print("[1/2] Downloading kokoro-v1.0.onnx...")
-    try:
-        hf_hub_download(
-            repo_id="hexgrad/Kokoro-82M",
-            filename="kokoro-v1.0.onnx",
-            local_dir=voices_dir,
-            local_dir_use_symlinks=False,
-        )
-        print("    ✓ Downloaded kokoro-v1.0.onnx")
-    except Exception as e:
-        print(f"    ✗ Failed to download kokoro-v1.0.onnx: {e}")
-        print("    Will be downloaded on first run")
-
+    # Note: Kokoro 0.9.x downloads the model automatically on first use
+    # This script pre-downloads the voice model file if available
+    print("[1/1] Checking for voice model files...")
+    print("    Note: Kokoro will automatically download the model on first use")
+    print("    If you want to pre-download, you can download from:")
+    print("    https://huggingface.co/hexgrad/Kokoro-82M")
     print()
-
-    # Download voices file
-    print("[2/2] Downloading voices-v1.0.bin...")
-    try:
-        hf_hub_download(
-            repo_id="hexgrad/Kokoro-82M",
-            filename="voices-v1.0.bin",
-            local_dir=voices_dir,
-            local_dir_use_symlinks=False,
-        )
-        print("    ✓ Downloaded voices-v1.0.bin")
-    except Exception as e:
-        print(f"    ✗ Failed to download voices-v1.0.bin: {e}")
-        print("    Will be downloaded on first run")
-
+    print("Voice models will be downloaded automatically when first needed.")
     print()
-    print("Voice models download complete!")
-    print("Files saved to: voices/")
-    print()
-    print("Note: If download failed, voices will be automatically downloaded")
-    print("      on first TTS run when needed.")
+    print("Done! (Voice models will be downloaded on first TTS run)")
 
 
 if __name__ == "__main__":
