@@ -32,11 +32,12 @@ if errorlevel 1 (
     set VC_Redist_Needed=0
 )
 
-echo [1/5] Creating virtual environment...
+echo [1/6] Creating virtual environment...
 if not exist "venv" (
-    python -m venv venv
+    py -3.10 -m venv venv
     if errorlevel 1 (
         echo [ERROR] Failed to create virtual environment
+        echo Make sure Python 3.10 is installed (py -3.10)
         pause
         exit /b 1
     )
@@ -45,15 +46,15 @@ if not exist "venv" (
 )
 
 echo.
-echo [2/5] Activating virtual environment...
+echo [2/6] Activating virtual environment...
 call venv\Scripts\activate.bat
 
 echo.
-echo [3/5] Upgrading pip...
+echo [3/6] Upgrading pip...
 python -m pip install --upgrade pip --quiet
 
 echo.
-echo [4/5] Installing dependencies...
+echo [4/6] Installing dependencies...
 echo     This may take a few minutes...
 pip install -r requirements.txt --quiet
 if errorlevel 1 (
@@ -63,11 +64,14 @@ if errorlevel 1 (
 )
 
 echo.
-echo [5/5] Downloading Kokoro voice models...
+echo [5/6] Downloading Kokoro voice models...
 python scripts\download_voices.py
 if errorlevel 1 (
     echo [WARNING] Voice download failed. Voices will be downloaded on first run.
 )
+
+echo.
+echo [6/6] Installation complete!
 
 echo.
 echo ========================================
