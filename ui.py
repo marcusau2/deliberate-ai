@@ -51,10 +51,9 @@ from pipeline import Pipeline
 from tts_client import get_tts_client, TTSClient
 from error_tracker import error_tracker, log_pipeline_error, log_ui_error
 from search import search_searxng, check_searxng_reachable
-from tts_client import get_tts_client
 
-# Get TTS client instance
-tts_client = get_tts_client()
+# TTS client will be initialized lazily when first needed
+tts_client = None
 
 # Set application style
 QApplication.setStyle("Fusion")
@@ -88,16 +87,17 @@ class TTSGenerationWorker(QRunnable):
         try:
             self.signals.progress.emit("Initializing TTS...")
 
-            # Use the global tts_client
+            # Get TTS client instance
+            client = get_tts_client()
             voice = (
-                tts_client.available_voices[self.voice_index]
-                if self.voice_index < len(tts_client.available_voices)
+                client.available_voices[self.voice_index]
+                if self.voice_index < len(client.available_voices)
                 else "alba"
             )
 
             # Generate and play (this blocks until playback is complete)
             # Save to file if requested
-            tts_client.generate_and_play(
+            client.generate_and_play(
                 self.text,
                 voice=voice,
                 save_to_file=self.save_to_file,
@@ -1101,7 +1101,9 @@ class DeliberateAI(QMainWindow):
         # Voice selector
         tts_layout.addWidget(QLabel("Voice:"))
         self.tts_report_voice_combo = QComboBox()
-        self.tts_report_voice_combo.addItems(tts_client.available_voices)
+        # Initialize TTS client to get available voices
+        client = get_tts_client()
+        self.tts_report_voice_combo.addItems(client.available_voices)
         self.tts_report_voice_combo.setCurrentText("af_bella")
         self.tts_report_voice_combo.setEnabled(True)
         tts_layout.addWidget(self.tts_report_voice_combo)
@@ -2249,7 +2251,8 @@ class DeliberateAI(QMainWindow):
 
         # Start generation and playback with file saving
         voice = self.tts_report_voice_combo.currentText()
-        tts_client.generate_and_play(
+        client = get_tts_client()
+        client.generate_and_play(
             text,
             voice=voice,
             save_to_file=True,
@@ -2272,7 +2275,8 @@ class DeliberateAI(QMainWindow):
     def stop_tts(self):
         """Stop TTS playback"""
         try:
-            tts_client.stop()
+            client = get_tts_client()
+            client.stop()
             self.tts_status_label.setText("Stopped")
             self.tts_play_report_btn.setEnabled(True)
             self.tts_stop_report_btn.setEnabled(False)
