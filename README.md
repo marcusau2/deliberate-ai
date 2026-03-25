@@ -4,6 +4,33 @@
 
 ---
 
+## ⚠️ Important: What This Is (And What It's Not)
+
+**This is NOT an "answer machine"** that gives you definitive predictions or guarantees. Instead, it's a **structured thinking framework** that helps you work through complex problems by exposing you to multiple expert perspectives.
+
+**What it does:**
+- ✅ Shows you how different types of experts would analyze your situation
+- ✅ Reveals where experts agree (consensus) and disagree (uncertainties)
+- ✅ Helps you identify blind spots in your own thinking
+- ✅ Provides a structured way to weigh different factors
+- ✅ Tracks how opinions evolve when experts debate
+- ✅ Gives you confidence levels and reasoning, not just conclusions
+
+**What it doesn't do:**
+- ❌ Guarantee correct answers or predictions
+- ❌ Replace your own judgment and experience
+- ❌ Provide licensed professional advice (medical, legal, financial)
+- ❌ Predict black swan events or unforeseeable changes
+- ❌ Make the decision for you
+
+**Think of it as:** A virtual think tank that stress-tests your thinking against multiple expert perspectives. The value isn't in the "answer" - it's in understanding the reasoning, uncertainties, and different viewpoints so **you** can make a more informed decision.
+
+**Best for:** Complex decisions with multiple factors, situations where you want to understand different perspectives, planning and strategy, risk assessment.
+
+**Not for:** Simple yes/no questions, situations requiring licensed professional advice, time-critical decisions needing immediate action.
+
+---
+
 ## What Is Deliberate AI?
 
 **Deliberate AI is like having a virtual think tank to help you make important decisions.** Instead of asking a single AI for an answer, it creates a simulated debate among 12 expert personas with different backgrounds, perspectives, and areas of expertise.
@@ -424,6 +451,21 @@ Research in decision science shows that diverse groups consistently outperform e
 
 ---
 
+## The Bottom Line
+
+**Deliberate AI is a framework to help you think, not an oracle to tell you what to think.**
+
+The value isn't in getting "the right answer" - it's in:
+- Seeing your problem from multiple expert perspectives
+- Understanding where reasonable experts would disagree
+- Identifying blind spots in your own reasoning
+- Getting structured analysis instead of vague "it depends" responses
+- Making more informed decisions based on diverse viewpoints
+
+**Use it to enhance your judgment, not replace it.** The final decision is always yours.
+
+---
+
 ## License
 
 This project is licensed under the **Apache License 2.0** - see the [LICENSE](LICENSE) file for details.
@@ -454,4 +496,4 @@ Current version: 2.0 (PyQt6)
 
 ---
 
-**Deliberate AI: Stress-test your thinking against a panel of expert perspectives.**
+**Deliberate AI: A framework to help you think through complex decisions.**
