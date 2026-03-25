@@ -291,7 +291,7 @@ After a simulation completes:
 Deliberate AI generates comprehensive reports with these sections:
 
 - **Executive Summary**: Complete overview of the debate and findings
-- **Predicted Outcome**: Specific recommendations with detailed reasoning
+- **Predicted Outcomes with Reasoning**: Specific scenarios with detailed supporting arguments
 - **Confidence Level**: How certain the analysis is (Low/Medium/High)
 - **Expert Positions**: Where each persona stands and how they evolved
 - **Consensus Areas**: Where experts agree (most reliable insights)
