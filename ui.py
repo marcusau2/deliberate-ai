@@ -764,14 +764,14 @@ class DeliberateAI(QMainWindow):
         title.setStyleSheet("color: #3B8ED0; padding: 10px;")
         layout.addWidget(title)
 
-        # Input mode selector
+        # Input mode selector (simplified to just Question mode)
         mode_group = QGroupBox("Input Mode")
         mode_layout = QVBoxLayout(mode_group)
         mode_layout.setSpacing(5)
 
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["Question", "Document", "YAML"])
-        self.mode_combo.currentTextChanged.connect(self.on_mode_change)
+        self.mode_combo.addItems(["Question"])  # Only question mode
+        self.mode_combo.setEnabled(False)  # Disabled since only one option
         mode_layout.addWidget(self.mode_combo)
 
         layout.addWidget(mode_group)
@@ -887,7 +887,7 @@ class DeliberateAI(QMainWindow):
 
         self.input_text = QTextEdit()
         self.input_text.setPlaceholderText(
-            "Enter your decision question or scenario..."
+            "Enter your decision question or scenario here...\n\nExample: 'Should I invest in this new AI startup given the current market conditions?'"
         )
         self.input_text.setMinimumHeight(180)
         self.input_text.setMaximumHeight(250)
