@@ -81,24 +81,24 @@ def check_dependencies():
 
     # Check other packages
     other_packages = [
-        "PyQt6",
-        "kokoro",
-        "openai",
-        "pyyaml",
-        "pypdf2",
-        "requests",
-        "scipy",
-        "sounddevice",
-        "soundfile",
-        "loguru",
+        ("PyQt6", "PyQt6"),
+        ("kokoro", "kokoro"),
+        ("openai", "openai"),
+        ("yaml", "pyyaml"),  # Package name is pyyaml, import name is yaml
+        ("pypdf2", "pypdf2"),
+        ("requests", "requests"),
+        ("scipy", "scipy"),
+        ("sounddevice", "sounddevice"),
+        ("soundfile", "soundfile"),
+        ("loguru", "loguru"),
     ]
 
-    for package in other_packages:
+    for import_name, display_name in other_packages:
         try:
-            __import__(package)
-            print(f"[OK] {package}")
+            __import__(import_name)
+            print(f"[OK] {display_name}")
         except ImportError as e:
-            print(f"[ERROR] {package}: {e}")
+            print(f"[ERROR] {display_name}: {e}")
             return False
 
     return True
