@@ -23,7 +23,7 @@ torch>=2.0.0
 scipy>=1.11.0
 sounddevice>=0.4.6
 soundfile>=0.12.0
-misaki[en]>=0.3.0
+misaki>=0.7.0
 
 # Utilities
 loguru>=0.7.0
