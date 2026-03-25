@@ -50,9 +50,38 @@ def check_visual_cpp():
 
 def check_dependencies():
     """Check if all required packages are installed"""
-    required = [
+    # Import torch FIRST (before PyQt6) to avoid DLL conflicts
+    try:
+        import torch
+
+        print(f"[OK] torch (v{torch.__version__})")
+    except ImportError as e:
+        print(f"[ERROR] torch: {e}")
+        return False
+    except OSError as e:
+        print(f"[DLL ERROR] torch: {e}")
+        print("\nThis is typically caused by:")
+        print("  1. Missing Visual C++ Redistributable")
+        print("  2. PyQt6 loaded before torch")
+        print("\nSolutions:")
+        print(
+            "  1. Install Visual C++ Redistributable: https://aka.ms/vs/17/release/vc_redist.x64.exe"
+        )
+        print("  2. Restart your computer after installing VC++")
+        return False
+
+    # Import numpy
+    try:
+        import numpy
+
+        print("[OK] numpy")
+    except ImportError as e:
+        print(f"[ERROR] numpy: {e}")
+        return False
+
+    # Check other packages
+    other_packages = [
         "PyQt6",
-        "torch",
         "kokoro",
         "openai",
         "pyyaml",
@@ -63,21 +92,14 @@ def check_dependencies():
         "soundfile",
         "loguru",
     ]
-    missing = []
 
-    for package in required:
+    for package in other_packages:
         try:
             __import__(package)
             print(f"[OK] {package}")
         except ImportError as e:
-            missing.append((package, str(e)))
-
-    if missing:
-        print(f"\n[ERROR] Missing packages:")
-        for pkg, err in missing:
-            print(f"  - {pkg}: {err}")
-        print("\nRun: pip install -r requirements.txt")
-        return False
+            print(f"[ERROR] {package}: {e}")
+            return False
 
     return True
 
