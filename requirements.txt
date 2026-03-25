@@ -18,12 +18,13 @@ requests==2.31.0
 
 # Text-to-Speech (Kokoro)
 # Note: kokoro 0.7.x supports Python 3.9-3.12, kokoro 0.9.x requires Python 3.10-3.13
+# misaki is a dependency of kokoro for G2P (grapheme-to-phoneme)
+# Using kokoro>=0.7.0 which will install compatible misaki automatically
 kokoro>=0.7.0
 torch>=2.0.0
 scipy>=1.11.0
 sounddevice>=0.4.6
 soundfile>=0.12.0
-misaki>=0.7.0
 
 # Utilities
 loguru>=0.7.0
