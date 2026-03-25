@@ -12,6 +12,10 @@ import traceback
 from datetime import datetime
 from typing import Optional, Callable
 
+# Import torch BEFORE PyQt6 to avoid DLL conflicts on Windows
+import torch
+import numpy as np
+
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
