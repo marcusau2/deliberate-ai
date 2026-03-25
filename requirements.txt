@@ -1,0 +1,28 @@
+# Deliberate AI - Core Dependencies
+# Python 3.9+
+
+# GUI Framework
+PyQt6==6.6.1
+PyQt6-Qt6==6.6.1
+PyQt6-sip==13.6.0
+
+# LLM Integration
+openai==1.12.0
+
+# Text Processing
+pyyaml==6.0.1
+pypdf2==3.0.0
+
+# HTTP & Search
+requests==2.31.0
+
+# Text-to-Speech (Kokoro)
+kokoro>=0.9.4
+torch>=2.0.0
+scipy>=1.11.0
+sounddevice>=0.4.6
+soundfile>=0.12.0
+misaki[en]>=0.3.0
+
+# Utilities
+loguru>=0.7.0
