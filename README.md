@@ -153,6 +153,9 @@ The final report synthesizes this entire process into actionable insights.
 - Windows 10/11
 - **Python 3.10, 3.11, or 3.12** (recommended for best compatibility)
   - Note: Python 3.13+ may require building some packages from source
+- **Microsoft Visual C++ 2015-2022 Redistributable** (required for PyTorch)
+  - Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe
+  - The installer will check if this is installed and warn if missing
 - 4GB+ RAM (8GB recommended)
 - Internet connection (for initial setup and optional web search)
 
