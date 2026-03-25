@@ -85,7 +85,7 @@ def check_dependencies():
         ("kokoro", "kokoro"),
         ("openai", "openai"),
         ("yaml", "pyyaml"),  # Package name is pyyaml, import name is yaml
-        ("pypdf2", "pypdf2"),
+        ("PyPDF2", "PyPDF2"),  # Package name is PyPDF2, import name is PyPDF2
         ("requests", "requests"),
         ("scipy", "scipy"),
         ("sounddevice", "sounddevice"),
