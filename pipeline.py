@@ -121,12 +121,16 @@ class Pipeline:
     def stage1_situation_extraction(
         self, input_text: str, search_context: Optional[str] = None
     ) -> dict:
-        """Stage 1: Extract structured situation summary with domain context."""
+        """Stage 1: Extract structured situation summary with decision structure detection.
+
+        Detects question type (binary, multi_option, open_ended, analysis),
+        extracts options, and identifies evaluation criteria.
+        """
         context_block = ""
         if search_context:
             context_block = f"\n\nCurrent Context (from web search):\n{search_context}"
 
-        prompt = f"""Extract a structured situation summary from the following input:{context_block}
+        prompt = f"""Analyze the following input and extract BOTH the situation context AND the decision structure.{context_block}
 
 Input:
 {input_text}
@@ -139,10 +143,32 @@ Return JSON with this exact structure:
   "key_stakeholders": ["string"],
   "domain": "geopolitical|interpersonal|social|financial|technical|narrative",
   "prediction_question": "string",
-  "relevant_disciplines": ["list of relevant disciplines like 'climate science', 'economic policy', 'engineering', 'ethics', 'law'"],
-  "typical_roles": ["list of specific role types like 'climate scientist', 'policy maker', 'industry analyst', 'NGO director'"],
-  "domain_context": "string describing the domain-specific context and key tensions"
-}}"""
+  "relevant_disciplines": ["list of relevant disciplines"],
+  "typical_roles": ["list of specific role types"],
+  "domain_context": "string describing the domain-specific context and key tensions",
+
+  "question_type": "binary|multi_option|open_ended|analysis",
+  "options": ["option1", "option2", ...] or [] if not applicable,
+  "evaluation_criteria": ["criterion1", "criterion2", ...],
+  "decision_structure_notes": "explanation of how the question was interpreted"
+}}
+
+QUESTION TYPE RULES:
+- "binary": Clear yes/no or do/don't decision (e.g., "Should I take this job?")
+- "multi_option": User presents 2+ specific options to compare (e.g., "Tesla vs Rivian vs Lucid")
+- "open_ended": User asks what to do without specifying options (e.g., "How should I handle this?")
+- "analysis": User wants analysis of a situation/document without a clear decision
+
+OPTIONS EXTRACTION:
+- For multi_option: Extract the explicit options the user mentioned
+- For open_ended: Generate 2-4 plausible options based on the situation
+- For binary/analysis: Leave as empty array []
+
+EVALUATION CRITERIA:
+- Extract criteria the user explicitly mentions
+- Infer relevant criteria from the domain (e.g., cost, risk, timing for financial)
+- Include 3-6 criteria maximum
+"""
 
         messages = [{"role": "user", "content": prompt}]
         return self.call_llm(messages, thinking=False, temperature=0.7)
@@ -154,446 +180,280 @@ Return JSON with this exact structure:
         search_context: Optional[str] = None,
         progress_callback: Optional[Callable] = None,
     ) -> list:
-        """Stage 2: Generate domain-specific personas concurrently with grounding.
+        """Stage 2: Generate 6 domain-specific personas with deliberate diversity.
 
-        Creates realistic personas with specific roles, organizations, and domain expertise
-        based on the situation context, following multi-agent debate research best practices.
+        Uses orthogonal diversity axes to ensure genuine perspective diversity:
+        - Diversity role (adversarial vs constructive)
+        - Epistemic type (how they know what they know)
+        - Option alignment (for multi-option questions)
 
         Args:
-            situation: The situation dict from Stage 1
+            situation: The situation dict from Stage 1 (includes question_type, options)
             original_input: Full original input text for grounding
             search_context: Web search results (if available)
             progress_callback: Optional callback(persona) for real-time UI updates
 
         Returns:
-            List of 12 domain-specific personas with grounded positions
+            List of 6 domain-specific personas with grounded positions
         """
+        from memory import init_session, store_decision_context, store_persona
+        import uuid
+
         domain = situation.get("domain", "social")
         disciplines = situation.get("relevant_disciplines", [])
         role_types = situation.get("typical_roles", [])
         domain_context = situation.get("domain_context", "")
+        question_type = situation.get("question_type", "binary")
+        options = situation.get("options", [])
+        evaluation_criteria = situation.get("evaluation_criteria", [])
 
-        # Define approach archetypes (how they think/argue)
-        approaches = [
-            "Advocate",  # Strongly supports a position
-            "Critic",  # Questions assumptions and risks
-            "Compromiser",  # Seeks middle ground
-            "Idealist",  # Focuses on principles and values
-            "Pragmatist",  # Focuses on feasibility and costs
-            "Radical",  # Pushes for transformative change
-            "Moderate",  # Cautious, incremental approach
-            "Skeptic",  # Doubts feasibility or motives
-            "Visionary",  # Long-term, big-picture thinking
-            "Traditionalist",  # Prefers established methods
-            "Reformer",  # Wants systematic improvement
-            "Conservative",  # Risk-averse, status quo
+        # Initialize SQLite session for this debate
+        session_id = str(uuid.uuid4())[:8]
+        init_session(session_id)
+        store_decision_context(session_id, {
+            "question_type": question_type,
+            "options": options,
+            "evaluation_criteria": evaluation_criteria,
+            "core_issue": situation.get("core_issue", ""),
+            "original_input": original_input[:2000],
+        })
+
+        # Define 6 deliberate diversity roles (orthogonal, not redundant)
+        if question_type == "multi_option" and len(options) >= 2:
+            # For multi-option: assign personas to champion different options
+            diversity_roles = [
+                {"role": "Option Champion", "target": options[0], "description": f"Naturally gravitates toward {options[0]}"},
+                {"role": "Option Champion", "target": options[1] if len(options) > 1 else options[0], "description": f"Naturally gravitates toward {options[1] if len(options) > 1 else options[0]}"},
+                {"role": "Cross-Option Evaluator", "target": "all", "description": "Evaluates all options against criteria without bias"},
+                {"role": "Adversarial Challenger", "target": "all", "description": "Challenges assumptions about ALL options"},
+                {"role": "Synthesist", "target": "all", "description": "Seeks to reconcile tensions between options"},
+                {"role": "Empiricist", "target": "all", "description": "Demands data and evidence before committing to any option"},
+            ]
+        elif question_type == "binary":
+            # For binary: structured disagreement
+            diversity_roles = [
+                {"role": "Proponent", "target": "yes", "description": "Strongly supports taking the action"},
+                {"role": "Proponent", "target": "yes", "description": "Supports taking the action from a different angle"},
+                {"role": "Opponent", "target": "no", "description": "Strongly opposes taking the action"},
+                {"role": "Opponent", "target": "no", "description": "Opposes taking the action from a different angle"},
+                {"role": "Synthesist", "target": "conditional", "description": "Seeks conditional/nuanced position"},
+                {"role": "Empiricist", "target": "data-driven", "description": "Demands evidence before committing either way"},
+            ]
+        elif question_type == "open_ended":
+            # For open-ended: option generators + critics
+            diversity_roles = [
+                {"role": "Option Generator", "target": "explorer", "description": "Generates creative possibilities"},
+                {"role": "Option Generator", "target": "explorer", "description": "Generates practical possibilities"},
+                {"role": "Adversarial Critic", "target": "stress-test", "description": "Stress-tests proposed options"},
+                {"role": "Adversarial Critic", "target": "stress-test", "description": "Identifies hidden risks in proposed options"},
+                {"role": "Synthesist", "target": "converge", "description": "Converges on the best path forward"},
+                {"role": "Empiricist", "target": "data-driven", "description": "Grounds discussion in evidence"},
+            ]
+        else:  # analysis
+            diversity_roles = [
+                {"role": "Surface Interpreter", "target": "literal", "description": "Analyzes what's explicitly stated"},
+                {"role": "Deep Interpreter", "target": "subtext", "description": "Analyzes what's implied or missing"},
+                {"role": "Contextualizer", "target": "broader", "description": "Places findings in broader context"},
+                {"role": "Adversarial Critic", "target": "challenge", "description": "Challenges the interpretation"},
+                {"role": "Synthesist", "target": "integrate", "description": "Integrates multiple interpretations"},
+                {"role": "Empiricist", "target": "evidence", "description": "Demands evidence for claims"},
+            ]
+
+        # Define 6 epistemic types (how they know what they know)
+        epistemic_types = [
+            {"type": "Empiricist", "description": "Relies on data, statistics, and observable evidence"},
+            {"type": "Pragmatist", "description": "Relies on practical experience and what works in practice"},
+            {"type": "Principled", "description": "Relies on ethical principles and moral reasoning"},
+            {"type": "Systemic", "description": "Relies on understanding systems, patterns, and second-order effects"},
+            {"type": "Adversarial", "description": "Relies on finding flaws, counter-arguments, and edge cases"},
+            {"type": "Synthesist", "description": "Relies on integrating multiple perspectives into coherent wholes"},
         ]
 
         # If we don't have role types from Stage 1, create domain-specific defaults
         if not role_types:
             if domain == "geopolitical":
-                role_types = [
-                    "policy analyst",
-                    "diplomat",
-                    "NGO director",
-                    "industry lobbyist",
-                    "academic researcher",
-                    "community advocate",
-                ]
+                role_types = ["policy analyst", "diplomat", "NGO director", "industry lobbyist", "academic researcher", "community advocate"]
             elif domain == "financial":
-                role_types = [
-                    "portfolio manager",
-                    "risk analyst",
-                    "regulatory compliance officer",
-                    "investment strategist",
-                    "economist",
-                    "consumer advocate",
-                ]
+                role_types = ["portfolio manager", "risk analyst", "regulatory compliance officer", "investment strategist", "economist", "consumer advocate"]
             elif domain == "technical":
-                role_types = [
-                    "senior engineer",
-                    "research scientist",
-                    "product manager",
-                    "security expert",
-                    "open source contributor",
-                    "enterprise architect",
-                ]
+                role_types = ["senior engineer", "research scientist", "product manager", "security expert", "open source contributor", "enterprise architect"]
             elif domain == "interpersonal":
-                role_types = [
-                    "family therapist",
-                    "mediator",
-                    "psychologist",
-                    "cultural advisor",
-                    "conflict resolution specialist",
-                    "community leader",
-                ]
+                role_types = ["family therapist", "mediator", "psychologist", "cultural advisor", "conflict resolution specialist", "community leader"]
             else:
-                role_types = [
-                    "subject matter expert",
-                    "stakeholder representative",
-                    "industry analyst",
-                    "policy observer",
-                    "academic researcher",
-                    "practitioner",
-                ]
+                role_types = ["subject matter expert", "stakeholder representative", "industry analyst", "policy observer", "academic researcher", "practitioner"]
 
-        # If we don't have disciplines, create generic ones
         if not disciplines:
-            disciplines = [
-                "domain expertise",
-                "policy analysis",
-                "economic implications",
-                "ethical considerations",
-            ]
+            disciplines = ["domain expertise", "policy analysis", "economic implications", "ethical considerations"]
 
         # Truncate original input for prompt
-        input_truncated = (
-            original_input[:5000] if len(original_input) > 5000 else original_input
-        )
+        input_truncated = original_input[:5000] if len(original_input) > 5000 else original_input
 
         # Prepare search context block
         search_block = ""
         if search_context:
             search_block = f"\n\nWEB SEARCH CONTEXT (reference if relevant):\n{search_context[:2000]}"
 
-        # STEP 1: Generate 12 unique names with diverse origins and unique last names
-        # This ensures no duplicate last names across all personas
-        name_generation_prompt = f"""Generate exactly 12 UNIQUE names with diverse cultural origins.
+        # Generate 6 unique names with diverse origins
+        name_pool = [
+            {"region": "Middle Eastern", "first_name": "Layla", "last_name": "Hassan"},
+            {"region": "African", "first_name": "Kwame", "last_name": "Mensah"},
+            {"region": "South Asian", "first_name": "Priya", "last_name": "Sharma"},
+            {"region": "East Asian", "first_name": "Wei", "last_name": "Zhang"},
+            {"region": "Eastern European", "first_name": "Natasha", "last_name": "Volkov"},
+            {"region": "Latin American", "first_name": "Mateo", "last_name": "Rivera"},
+        ]
 
-CRITICAL REQUIREMENTS:
-1. Each name must have a UNIQUE LAST NAME - NO DUPLICATES ALLOWED
-2. Include diverse origins: Middle Eastern, African, South Asian, East Asian, Eastern European, Latin American, Western European, Anglo-American (roughly 2 per region)
-3. Names should be realistic and authentic to their cultural origin
-4. Return ONLY JSON array with this exact structure:
+        def generate_single_persona(index, role_type, diversity_role, epistemic_type, assigned_name):
+            """Generate a single persona with explicit diversity assignment."""
+            option_alignment = []
+            if diversity_role.get("target") != "all" and diversity_role.get("target") not in ["yes", "no", "conditional", "data-driven", "explorer", "stress-test", "converge", "challenge", "integrate", "evidence", "literal", "subtext", "broader"]:
+                option_alignment = [diversity_role["target"]]
 
-[
-  {{"region": "Middle Eastern", "first_name": "Name", "last_name": "UniqueLastName"}},
-  {{"region": "African", "first_name": "Name", "last_name": "UniqueLastName"}},
-  ... (12 total, each with unique last name)
-]
-
-Ensure all 12 last names are completely different from each other."""
-
-        try:
-            name_result = self.call_llm(
-                [{"role": "user", "content": name_generation_prompt}],
-                thinking=False,
-                temperature=0.8,
-                max_tokens=500,
-                retry=True,
-            )
-
-            # Parse the names
-            if isinstance(name_result, list) and len(name_result) == 12:
-                name_pool = name_result
-                # Validate unique last names
-                last_names = [n.get("last_name", "") for n in name_result]
-                if len(last_names) == len(set(last_names)):
-                    # All last names are unique - good!
-                    pass
-                else:
-                    # Duplicate last names found - regenerate with stricter constraints
-                    name_generation_prompt += "\n\n⚠️ WARNING: You have duplicate last names. Regenerate with 12 COMPLETELY UNIQUE last names."
-                    name_result = self.call_llm(
-                        [{"role": "user", "content": name_generation_prompt}],
-                        thinking=False,
-                        temperature=0.9,
-                        max_tokens=500,
-                        retry=False,
-                    )
-                    name_pool = name_result if isinstance(name_result, list) else []
-            else:
-                name_pool = []
-        except Exception as e:
-            logger.warning(f"Name generation failed: {e}. Using fallback names.")
-            name_pool = []
-
-        # Fallback names if generation failed (ensures unique last names)
-        if len(name_pool) < 12:
-            name_pool = [
-                {
-                    "region": "Middle Eastern",
-                    "first_name": "Layla",
-                    "last_name": "Hassan",
-                },
-                {
-                    "region": "Middle Eastern",
-                    "first_name": "Omar",
-                    "last_name": "Farooq",
-                },
-                {"region": "African", "first_name": "Kwame", "last_name": "Mensah"},
-                {"region": "African", "first_name": "Amara", "last_name": "Nwosu"},
-                {"region": "South Asian", "first_name": "Priya", "last_name": "Sharma"},
-                {"region": "South Asian", "first_name": "Arjun", "last_name": "Patel"},
-                {"region": "East Asian", "first_name": "Wei", "last_name": "Zhang"},
-                {"region": "East Asian", "first_name": "Yuki", "last_name": "Tanaka"},
-                {
-                    "region": "Eastern European",
-                    "first_name": "Natasha",
-                    "last_name": "Volkov",
-                },
-                {
-                    "region": "Eastern European",
-                    "first_name": "Viktor",
-                    "last_name": "Novak",
-                },
-                {
-                    "region": "Latin American",
-                    "first_name": "Mateo",
-                    "last_name": "Rivera",
-                },
-                {
-                    "region": "Latin American",
-                    "first_name": "Isabella",
-                    "last_name": "Castillo",
-                },
-            ]
-
-        # Ensure we have exactly 12 names
-        while len(name_pool) < 12:
-            name_pool.append(
-                {
-                    "region": "Western European",
-                    "first_name": "Default",
-                    "last_name": f"Person{len(name_pool)}",
-                }
-            )
-
-        # STEP 2: Create role-approach pairings for 12 personas
-        role_approach_pairs = []
-        for i in range(12):
-            role = role_types[i % len(role_types)]
-            approach = approaches[i % len(approaches)]
-            role_approach_pairs.append((role, approach))
-
-        def generate_single_persona(role_type, approach, assigned_name):
-            """Generate a single domain-specific persona with assigned name and role."""
             prompt = f"""Create a domain-specific persona for this situation:
 
 SITUATION TITLE: {situation.get("title")}
 CORE ISSUE: {situation.get("core_issue")}
 DOMAIN: {domain}
+QUESTION TYPE: {question_type}
+{f"OPTIONS: {', '.join(options)}" if options else ""}
+{f"EVALUATION CRITERIA: {', '.join(evaluation_criteria)}" if evaluation_criteria else ""}
 DOMAIN CONTEXT: {domain_context}
-
-RELEVANT DISCIPLINES: {", ".join(disciplines)}
-STAKEHOLDER ROLES: {", ".join(role_types)}
 
 YOUR PERSONA TO CREATE:
 - Assigned Name: {assigned_name["first_name"]} {assigned_name["last_name"]} (MUST use this exact name)
 - Region: {assigned_name["region"]}
 - Role Type: {role_type}
-- Approach Lens: {approach} (how this persona thinks and argues)
+- Diversity Role: {diversity_role["role"]} — {diversity_role["description"]}
+- Epistemic Type: {epistemic_type["type"]} — {epistemic_type["description"]}
 
-ORIGINAL INPUT (MUST reference specific details):
+ORIGINAL INPUT:
 {input_truncated}{search_block}
-
-DIVERSITY MANDATE - CRITICAL:
-You are creating ONE of 12 personas. Each of the 12 personas must be UNIQUE and DISTINCT.
-
-DIVERSITY REQUIREMENTS:
-- Names must represent at least 6 different cultural/ethnic backgrounds across the 12 personas
-- NO repeated first names across any of the 12 personas
-- NO repeated last names across any of the 12 personas
-- Avoid common Western names (John, Jane, Michael, Sarah, David, etc.)
-- Include diverse naming conventions from multiple global regions
-- Each persona's name must be genuinely unique and not echo or resemble other personas
-- Names should reflect authentic cultural diversity, not variations of similar names
 
 CRITICAL REQUIREMENTS:
 1. Create a SPECIFIC, REALISTIC persona with:
-   - Use the ASSIGNED name: {assigned_name["first_name"]} {assigned_name["last_name"]} (from {assigned_name["region"]} region)
-   - A specific job title (e.g., "Senior Policy Analyst", "Director of Renewable Energy")
-   - A specific organization (e.g., "EPA", "World Bank", "Tesla", "Greenpeace") - vary organizations
+   - Use the ASSIGNED name: {assigned_name["first_name"]} {assigned_name["last_name"]}
+   - A specific job title and organization
    - Years of experience and relevant background
 
-2. Worldview must be shaped by:
-   - Their role's incentives and constraints
-   - Their disciplinary expertise
-   - Their organization's mission and pressures
+2. Your diversity role shapes HOW you approach the debate:
+   - {diversity_role["role"]}: {diversity_role["description"]}
+   - This is NOT just a personality trait — it determines your debate behavior
 
-3. Initial position MUST:
-   - Reference SPECIFIC details from the original input above
-   - NOT be a generic statement
-   - Show how their role and approach shape their view
-   - Include reasoning based on their expertise
+3. Your epistemic type shapes HOW you know what you know:
+   - {epistemic_type["type"]}: {epistemic_type["description"]}
+   - This determines what evidence you find persuasive
 
-4. Likely bias should reflect:
-   - Institutional pressures they face
-   - Disciplinary blind spots
-   - Stakeholder interests they represent
+4. Initial position MUST:
+   - Reference SPECIFIC details from the original input
+   - Show how your diversity role and epistemic type shape your view
+   - Include reasoning based on your expertise
 
-BEFORE finalizing, verify:
-✓ My name is unique and culturally distinct from all other personas
-✓ My name does not resemble or echo other personas (avoid variations like "Elena Petrova", "Elena Petrov", "Elena Petrova-Smith")
-✓ My organization is specific and different from other personas
-✓ My background (education, geography, career) is distinct
-✓ My perspective is shaped by my specific role and approach
-✓ I reference specific details from the input, not generic statements
-
-If any of these are NOT true, regenerate your persona with different characteristics.
-
-Return ONLY valid JSON (no markdown, no extra text):
+Return ONLY valid JSON:
 {{
-  "id": "p_X",
-  "name": "{assigned_name["first_name"]} {assigned_name["last_name"]}",
+  "id": "p_{index}",
+  "name": "{assigned_name['first_name']} {assigned_name['last_name']}",
   "role_title": "Specific job title",
   "organization": "Specific organization",
   "role_type": "{role_type}",
-  "approach": "{approach}",
+  "approach": "{diversity_role['role']}",
   "years_experience": "number",
-  "background": "Detailed domain-specific background and expertise",
-  "worldview": "How their role/discipline shapes their perspective",
-  "likely_bias": "Incentives/constraints from their position",
-  "initial_position": "Specific stance with reasoning grounded in input details"
+  "background": "Detailed domain-specific background",
+  "worldview": "How your role/discipline shapes your perspective",
+  "likely_bias": "Incentives/constraints from your position",
+  "initial_position": "Specific stance with reasoning grounded in input details",
+  "diversity_role": "{diversity_role['role']}",
+  "epistemic_type": "{epistemic_type['type']}",
+  "option_alignment": {json.dumps(option_alignment)}
 }}"""
 
             messages = [{"role": "user", "content": prompt}]
 
-            # Try multiple times with increasing strictness
-            persona = None
             for attempt in range(3):
                 try:
                     persona = self.call_llm(
-                        messages,
-                        thinking=False,
-                        temperature=0.85,
-                        max_tokens=800,
+                        messages, thinking=False, temperature=0.85, max_tokens=800,
                         retry=(attempt < 2),
                     )
                     if persona and isinstance(persona, dict):
-                        # Ensure all required fields exist
-                        required_fields = [
-                            "id",
-                            "name",
-                            "role_title",
-                            "organization",
-                            "role_type",
-                            "approach",
-                            "years_experience",
-                            "background",
-                            "worldview",
-                            "likely_bias",
-                            "initial_position",
-                        ]
-                        for field in required_fields:
+                        for field in ["id", "name", "role_title", "organization", "role_type",
+                                      "approach", "years_experience", "background", "worldview",
+                                      "likely_bias", "initial_position", "diversity_role", "epistemic_type", "option_alignment"]:
                             if field not in persona:
-                                persona[field] = ""
-
-                        # Ensure name matches assigned name
-                        persona["name"] = (
-                            f"{assigned_name['first_name']} {assigned_name['last_name']}"
-                        )
-
-                        # Generate ID if missing
-                        if not persona.get("id"):
-                            persona["id"] = (
-                                f"p_{role_type.replace(' ', '_')}_{approach.lower()}"
-                            )
-
+                                persona[field] = "" if field != "option_alignment" else []
+                        persona["name"] = f"{assigned_name['first_name']} {assigned_name['last_name']}"
+                        persona["id"] = f"p_{index}"
+                        persona["diversity_role"] = diversity_role["role"]
+                        persona["epistemic_type"] = epistemic_type["type"]
+                        if not persona.get("option_alignment"):
+                            persona["option_alignment"] = option_alignment
                         return persona
                 except Exception as e:
-                    logger.warning(
-                        f"Persona generation attempt {attempt + 1} failed: {e}"
-                    )
-                    if attempt < 2:
-                        messages = [
-                            {
-                                "role": "user",
-                                "content": prompt
-                                + "\n\nCRITICAL: Return ONLY valid JSON, nothing else. No markdown, no explanations.",
-                            }
-                        ]
+                    logger.warning(f"Persona {index} attempt {attempt + 1} failed: {e}")
 
-            # Fallback persona with assigned name
+            # Fallback
             return {
-                "id": f"p_{role_type.replace(' ', '_')}_{approach.lower()}",
+                "id": f"p_{index}",
                 "name": f"{assigned_name['first_name']} {assigned_name['last_name']}",
                 "role_title": role_type.title(),
                 "organization": "Unknown",
                 "role_type": role_type,
-                "approach": approach,
+                "approach": diversity_role["role"],
                 "years_experience": "0",
-                "background": f"{role_type} with {approach} approach",
-                "worldview": "Generic perspective",
+                "background": f"{role_type} with {diversity_role['role']} approach",
+                "worldview": epistemic_type["description"],
                 "likely_bias": "None specified",
-                "initial_position": "Position pending - see situation context",
+                "initial_position": "Position pending",
+                "diversity_role": diversity_role["role"],
+                "epistemic_type": epistemic_type["type"],
+                "option_alignment": option_alignment,
             }
 
-        # Generate personas concurrently with assigned names
+        # Generate 6 personas concurrently
         personas = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
             futures = [
-                executor.submit(generate_single_persona, role, approach, name_pool[i])
-                for i, (role, approach) in enumerate(role_approach_pairs)
+                executor.submit(
+                    generate_single_persona, i,
+                    role_types[i % len(role_types)],
+                    diversity_roles[i],
+                    epistemic_types[i],
+                    name_pool[i],
+                )
+                for i in range(6)
             ]
 
             for future in concurrent.futures.as_completed(futures):
                 try:
                     persona = future.result()
                     personas.append(persona)
+                    # Store in SQLite
+                    store_persona(session_id, persona)
                     if progress_callback:
                         progress_callback(persona)
                 except Exception as e:
                     logger.error(f"Persona generation failed: {e}")
-                    # Add fallback persona
-                    personas.append(
-                        {
-                            "id": f"p_fallback_{len(personas)}",
-                            "name": f"{name_pool[len(personas)]['first_name']} {name_pool[len(personas)]['last_name']}",
-                            "role_title": "Unknown",
-                            "organization": "Unknown",
-                            "role_type": "Unknown",
-                            "approach": "Unknown",
-                            "years_experience": "0",
-                            "background": "Generation failed",
-                            "worldview": "Unknown",
-                            "likely_bias": "Unknown",
-                            "initial_position": "See situation context",
-                        }
-                    )
 
-        # Ensure we have exactly 12 personas
-        while len(personas) < 12:
-            personas.append(
-                {
-                    "id": f"p_missing_{len(personas)}",
-                    "name": "Missing Persona",
-                    "role_title": "Unknown",
-                    "organization": "Unknown",
-                    "role_type": "Unknown",
-                    "approach": "Unknown",
-                    "years_experience": "0",
-                    "background": "Missing",
-                    "worldview": "Unknown",
-                    "likely_bias": "Unknown",
-                    "initial_position": "See situation context",
-                }
-            )
+        # Ensure we have exactly 6 personas
+        while len(personas) < 6:
+            personas.append({
+                "id": f"p_missing_{len(personas)}",
+                "name": "Missing Persona",
+                "role_title": "Unknown",
+                "organization": "Unknown",
+                "role_type": "Unknown",
+                "approach": "Unknown",
+                "years_experience": "0",
+                "background": "Missing",
+                "worldview": "Unknown",
+                "likely_bias": "Unknown",
+                "initial_position": "See situation context",
+                "diversity_role": "Unknown",
+                "epistemic_type": "Unknown",
+                "option_alignment": [],
+            })
 
-        # Sort by ID for consistency
         personas.sort(key=lambda p: p.get("id", ""))
-
-        # POST-GENERATION VALIDATION: Check for duplicate last names
-        last_names = []
-        for persona in personas:
-            name_parts = persona.get("name", "").split()
-            if len(name_parts) >= 2:
-                last_name = name_parts[-1]
-                last_names.append(last_name)
-
-        # Flag any duplicates
-        from collections import Counter
-
-        last_name_counts = Counter(last_names)
-        duplicates = [ln for ln, count in last_name_counts.items() if count > 1]
-
-        if duplicates:
-            logger.warning(
-                f"WARNING: Duplicate last names found: {duplicates}. This should not happen."
-            )
-            # Note: In production, you could regenerate these personas, but for now we'll log the warning
-
-        return personas[:12]
+        return personas[:6]
 
     def ensure_distinct_personas(self, personas: list) -> list:
         """Ensure all personas have distinct names and organizations.
