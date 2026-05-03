@@ -39,7 +39,6 @@ Thumbs.db
 # Project specific
 *.onnx
 *.json
-!settings.json
 !settings.example.json
 *.log
 error_log_*.log
