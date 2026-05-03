@@ -24,6 +24,24 @@ class Pipeline:
         self.model_name = model_name
         self.token_count = 0
 
+    def fetch_available_models(self) -> list:
+        """Fetch available models from the LLM endpoint via /v1/models."""
+        import requests
+
+        url = self.client.base_url.rstrip("/") + "/models"
+        try:
+            headers = {"Authorization": f"Bearer {self.client.api_key}"}
+            resp = requests.get(url, headers=headers, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            models = []
+            for m in data.get("data", []):
+                models.append(m.get("id", m.get("model", "")))
+            return sorted(set(m for m in models if m))
+        except Exception as e:
+            logger.warning(f"Failed to fetch models from {url}: {e}")
+            return []
+
     def estimate_tokens(self, text: str) -> int:
         """Estimate token count from text."""
         return len(text) // TOKEN_ESTIMATE_FACTOR

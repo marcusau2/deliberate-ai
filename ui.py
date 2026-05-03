@@ -2045,8 +2045,74 @@ class DeliberateAI(QMainWindow):
 
         # Model Name
         layout.addWidget(QLabel("Model Name:"))
-        model_input = QLineEdit(self.settings.get("model_name", ""))
-        layout.addWidget(model_input)
+        model_layout = QHBoxLayout()
+        model_combo = QComboBox()
+        model_combo.setEditable(True)
+        model_combo.setMinimumWidth(300)
+        current_model = self.settings.get("model_name", "")
+        if current_model:
+            model_combo.setCurrentText(current_model)
+        model_layout.addWidget(model_combo)
+
+        fetch_models_btn = QPushButton("Fetch Models")
+        model_fetching = {"busy": False}
+
+        def fetch_models():
+            if model_fetching["busy"]:
+                return
+            model_fetching["busy"] = True
+            fetch_models_btn.setEnabled(False)
+            fetch_models_btn.setText("Fetching...")
+
+            endpoint = endpoint_input.text().strip()
+            if not endpoint:
+                QMessageBox.warning(
+                    dialog, "Warning", "Enter an endpoint URL first, then click Fetch Models."
+                )
+                fetch_models_btn.setEnabled(True)
+                fetch_models_btn.setText("Fetch Models")
+                model_fetching["busy"] = False
+                return
+
+            api_key = api_input.text() or "empty"
+            try:
+                temp_pipeline = Pipeline(
+                    endpoint_url=endpoint,
+                    model_name="temp",
+                    api_key=api_key,
+                )
+                models = temp_pipeline.fetch_available_models()
+                model_combo.clear()
+                if models:
+                    model_combo.addItems(models)
+                    # Restore current selection if in list
+                    idx = model_combo.findText(current_model)
+                    if idx >= 0:
+                        model_combo.setCurrentIndex(idx)
+                    elif models:
+                        model_combo.setCurrentText(models[0])
+                    QMessageBox.information(
+                        dialog, "Success", f"Found {len(models)} model(s)."
+                    )
+                else:
+                    model_combo.setPlaceholderText("No models found — type manually")
+                    QMessageBox.warning(
+                        dialog,
+                        "No Models",
+                        "Could not retrieve models. Check the endpoint URL and try again, or type the model name manually.",
+                    )
+            except Exception as e:
+                QMessageBox.critical(
+                    dialog, "Error", f"Failed to fetch models:\n{e}"
+                )
+            finally:
+                fetch_models_btn.setEnabled(True)
+                fetch_models_btn.setText("Fetch Models")
+                model_fetching["busy"] = False
+
+        fetch_models_btn.clicked.connect(fetch_models)
+        model_layout.addWidget(fetch_models_btn)
+        layout.addLayout(model_layout)
 
         # API Key
         layout.addWidget(QLabel("API Key:"))
@@ -2071,7 +2137,7 @@ class DeliberateAI(QMainWindow):
 
         def save_settings():
             self.settings["vllm_endpoint_url"] = endpoint_input.text()
-            self.settings["model_name"] = model_input.text()
+            self.settings["model_name"] = model_combo.currentText()
             self.settings["api_key"] = api_input.text()
             self.settings["search_enabled"] = search_checkbox.isChecked()
             self.settings["search_url"] = search_url_input.text()
